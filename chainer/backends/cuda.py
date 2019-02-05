@@ -76,6 +76,21 @@ except Exception as e:
             pass
 
         @property
+        def ndim(self):
+            # type: () -> int
+            pass
+
+        @property
+        def size(self):
+            # type: () -> int
+            pass
+
+        @property
+        def dtype(self):
+            # type: () -> numpy.dtype
+            pass
+
+        @property
         def device(self):
             # type: () -> 'Device'
             pass
@@ -88,9 +103,17 @@ except Exception as e:
             # type: (numpy.ndarray, tp.Optional['Stream']) -> None
             pass
 
+        def fill(self, value):
+            # type: (tp.Any) -> None
+            pass
+
     class Device(object):  # type: ignore # for type testing
         def __init__(self, device=None):
             # type: (tp.Optional[int]) -> None
+            pass
+
+        def __int__(self):
+            # type: () -> int
             pass
 
         def __enter__(self):
@@ -99,6 +122,11 @@ except Exception as e:
 
         def __exit__(self, *args):
             # type: (*tp.Any) -> None
+            pass
+
+        @property
+        def id(self):
+            # type: () -> int
             pass
 
     class Event(object):  # type: ignore # for type testing
@@ -284,7 +312,7 @@ def get_device_from_id(device_id):
 
 
 def get_device_from_array(*arrays):
-    # type: (*ndarray) -> Device
+    # type: (*types.NdArray) -> Device
     """Gets the device from a list of CuPy array or a single CuPy array.
 
     .. deprecated:: v6.0.0

@@ -1,5 +1,9 @@
+import typing as tp  # NOQA
+
 import chainer
 from chainer import function_node
+from chainer import variable  # NOQA
+from chainer import types  # NOQA
 from chainer.utils import type_check
 
 
@@ -50,6 +54,7 @@ class Reshape(function_node.FunctionNode):
 
 
 def reshape(x, shape):
+    # type: (tp.Union[variable.Variable, types.NdArray], types.ShapeSpec) -> variable.Variable # NOQA
     """Reshapes an input variable without copy.
 
     Args:

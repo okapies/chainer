@@ -27,14 +27,22 @@ Shape = tp.Tuple[int, ...]
 ShapeSpec = tp.Union[int, tp.Sequence[int]]  # Sequence includes Tuple[int, ...] # NOQA
 
 
+AxesSpec = tp.Union[int, tp.Sequence[int]]  # Sequence includes Tuple[int, ...] # NOQA
+
+
 DTypeSpec = tp.Union[tp.Any]  # TODO(okapies): encode numpy.dtype
 
 
-NdArray = tp.Union[
+NonChainerxNdArray = tp.Union[
     'numpy.ndarray',
     'cuda.ndarray',
     # 'intel64.mdarray',
     # TODO(okapies): mdarray is partially incompatible with other ndarrays
+]
+
+
+NdArray = tp.Union[
+    NonChainerxNdArray,
     'chainerx.ndarray',
 ]
 """The ndarray types supported in :func:`chainer.get_array_types`

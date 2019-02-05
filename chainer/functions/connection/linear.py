@@ -1,11 +1,14 @@
 import numpy
+import typing as tp  # NOQA
 
 from chainer.backends import cuda
 from chainer.backends import intel64
 from chainer import function_node
 import chainer.functions
 from chainer.graph_optimizations import static_code
+from chainer import types  # NOQA
 from chainer import utils
+from chainer import variable  # NOQA
 from chainer.utils import type_check
 import chainerx
 
@@ -135,6 +138,7 @@ class LinearFunction(function_node.FunctionNode):
         return y,
 
     def backward(self, indexes, grad_outputs):
+        # type: (tp.Tuple[int], tp.Tuple[variable.Variable, ...]) -> tp.Sequence[tp.Optional[variable.Variable]] # NOQA
         x, W = self.get_retained_inputs()
         gy, = grad_outputs
         ret = []

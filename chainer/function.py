@@ -114,6 +114,7 @@ class FunctionAdapter(function_node.FunctionNode):
 
     @property
     def function(self):
+        # type: () -> Function
         """The :class:`Function` object that this adapter is wrapping."""
         func = self._function
         if func is not None:

@@ -23,6 +23,11 @@ from chainer.utils import argument
 import chainerx
 
 
+if types.TYPE_CHECKING:
+    from chainer import function  # NOQA
+    from chainer import function_node  # NOQA
+
+
 def _check_grad_type(func, x, is_node_x, gx, is_var_gx):
     if gx is None:
         return
@@ -171,8 +176,11 @@ class VariableNode(object):
 
     """
 
-    _creator_node = None
-    _data = None  # type: types.NdArray
+    name = None  # type: tp.Optional[str]
+    _creator_node = None  # type: tp.Optional[function_node.FunctionNode]
+    _data = None  # type: tp.Optional[types.NdArray]
+    dtype = None  # type: tp.Optional[numpy.dtype]
+    shape = None  # type: tp.Optional[types.Shape]
     _rank = 0  # type: int
     # Name of the Function is assigned if this variable is a gradient generated
     # by an old-style Function
@@ -180,7 +188,6 @@ class VariableNode(object):
 
     def __init__(self, variable, name, **kwargs):
         # type: (Variable, tp.Optional[str], **tp.Any) -> None
-
         if kwargs:
             argument.check_unexpected_kwargs(
                 kwargs,
@@ -196,6 +203,7 @@ class VariableNode(object):
 
     @property
     def creator(self):
+        # type: () -> tp.Optional[tp.Union[function.Function, function_node.FunctionNode]] # NOQA
         """Function object that created this variable node.
 
         When the function is implemented with the old-style API (i.e., it uses
@@ -252,10 +260,12 @@ class VariableNode(object):
 
     @creator.setter
     def creator(self, func):
+        # type: (tp.Optional[tp.Union[function.Function, function_node.FunctionNode]]) -> None # NOQA
         self.creator_node = func
 
     @property
     def creator_node(self):
+        # type: () -> tp.Optional[chainer.function_node.FunctionNode]
         """Function node that has this variable as an output.
 
         See :class:`~chainer.FunctionNode` for the definition of a function
@@ -266,14 +276,18 @@ class VariableNode(object):
 
     @creator_node.setter
     def creator_node(self, func):
+        # type: (tp.Optional[tp.Union[function.Function, function_node.FunctionNode]]) -> None # NOQA
         if isinstance(func, chainer.Function):
-            func = func.node
-        self._creator_node = func
-        if func is not None:
-            self._rank = func.rank + 1
+            func_node = func.node  # type: tp.Optional[function_node.FunctionNode] # NOQA
+        else:
+            func_node = func
+        self._creator_node = func_node
+        if func_node is not None:
+            self._rank = func_node.rank + 1
 
     @property
     def data(self):
+        # type: () -> tp.Optional[types.NdArray]
         """Data array of the corresponding variable.
 
         If the data is not available, it returns ``None``.
@@ -283,11 +297,13 @@ class VariableNode(object):
 
     @data.setter
     def data(self, d):
+        # type: (tp.Optional[types.NdArray]) -> None
         self._data = d
         self._update_data_info(d)
 
     @property
     def grad(self):
+        # type: () -> tp.Optional[types.NdArray]
         """Gradient array of the corresponding variable.
 
         If the variable is not available, it returns ``None``.
@@ -298,6 +314,7 @@ class VariableNode(object):
 
     @property
     def grad_var(self):
+        # type: () -> tp.Optional[types.NdArray]
         """Gradient variable of the corresponding variable.
 
         If the corresponding variable is not available, it return ``None``.
@@ -307,28 +324,35 @@ class VariableNode(object):
         return None if var is None else var.grad_var
 
     def _set_grad_var_if_available(self, g):
+        # type: (tp.Optional[types.NdArray]) -> None
         var = self._variable()
         if var is not None:
             var._set_grad_var_without_check(g)
 
     @property
     def label(self):
+        # type: () -> str
         """Short text that represents the variable node."""
-        if self.shape == ():
+        shape = self.shape
+        if shape == ():
             return str(self.dtype)
-        return '(%s), %s' % (', '.join(map(str, self.shape)),
-                             str(self.dtype))
+        return '(%s), %s' % (
+            ', '.join(map(str, shape)) if shape is not None else str(None),
+            str(self.dtype))
 
     @property
     def rank(self):
+        # type: () -> int
         return self._rank
 
     @property
     def requires_grad(self):
+        # type: () -> bool
         """It indicates that ``grad`` will be set in backward calculation."""
         return self._requires_grad
 
     def get_variable(self):
+        # type: () -> chainer.Variable
         """Returns the corresponding :class:`~chainer.Variable` object.
 
         VariableNode object holds a weak reference of the variable object. If
@@ -350,6 +374,7 @@ class VariableNode(object):
         return var
 
     def get_variable_or_none(self):
+        # type: () -> tp.Optional[chainer.Variable]
         """Returns the holding :class:`~chainer.Variable` object or ``None``.
 
         VariableNode object holds a weak reference of the variable object.If
@@ -363,6 +388,7 @@ class VariableNode(object):
         return self._variable()
 
     def set_creator(self, creator):
+        # type: (tp.Optional[tp.Union[function.Function, function_node.FunctionNode]]) -> None # NOQA
         """Sets a :class:`~chainer.Function` object that created this node.
 
         This method is equivalent to ``self.creator = creator``. A
@@ -376,6 +402,7 @@ class VariableNode(object):
         self.creator = creator
 
     def set_creator_node(self, creator_node):
+        # type: (tp.Optional[tp.Union[function.Function, function_node.FunctionNode]]) -> None # NOQA
         """Sets a :class:`~chainer.FunctionNode` object that created this node.
 
         This method is equivalent to ``self.creator_node = creator_node``. A
@@ -387,9 +414,10 @@ class VariableNode(object):
                 this variable as an output.
 
         """
-        self.creator_node = creator_node
+        self.creator_node = creator_node  # type: ignore # the setter accepts both Function and FunctionNode # NOQA
 
     def unchain(self):
+        # type: () -> None
         """Deletes the reference to the creator of this variable node.
 
         This method is equivalent to ``self.creator_node = None``.
@@ -398,6 +426,7 @@ class VariableNode(object):
         self.creator_node = None
 
     def retain_data(self):
+        # type: () -> None
         """Lets the node hold a reference to the underlying data array.
 
         This method gets the data array of the corresponding variable and keeps
@@ -513,12 +542,16 @@ class Variable(object):
 
     _data = None  # type: tp.List[tp.Optional[types.NdArray]]
 
-    _device = None  # type: tp.Optional[backend.Device]
+    _node = None  # type: tp.Optional[VariableNode]
 
     # Used in non-ChainerX variables. The gradient array is stored in
     # this attribute on Variable.grad setter to delay creation of grad_var
     # instance.
-    _grad = None
+    _grad = None  # type: tp.Optional[types.NonChainerxNdArray]
+
+    _grad_var = None  # type: tp.Optional["Variable"]
+
+    _device = None  # type: tp.Optional[backend.Device]
 
     def __init__(self, data=None, **kwargs):
         # type: (tp.Optional[types.NdArray], **tp.Any) -> None
@@ -652,18 +685,18 @@ class Variable(object):
             # Sets chainerx array and grad.
             requires_grad = self._requires_grad
 
-            if array.is_backprop_required():
-                if not requires_grad:
-                    raise ValueError(
-                        'Cannot initialize a variable to not require '
-                        'gradients if the ChainerX array already requires '
-                        'backprop.')
-            else:
+            if not array.is_backprop_required():
                 # If the array `array` is not connected to a graph, a view of
                 # it is created and kept, in order not to change the no-graph
                 # status of it. If the array is connected, the graph status is
                 # kept track of.
                 array = array.view()
+            else:
+                if not requires_grad:
+                    raise ValueError(
+                        'Cannot initialize a variable to not require '
+                        'gradients if the ChainerX array already requires '
+                        'backprop.')
 
             if requires_grad:
                 array.require_grad()
@@ -678,6 +711,7 @@ class Variable(object):
 
     @property
     def device(self):
+        # type: () -> backend.Device
         """Device on which the data array of this variable reside."""
         # lazy initialization for performance
         if self._device is None:
@@ -699,24 +733,28 @@ class Variable(object):
 
     @property
     def name(self):
+        # type: () -> tp.Optional[str]
         if self.xp is chainerx:
             return self._chainerx_name
-        return self._node.name
+        return self._node.name  # type: ignore # _node has value only when xp is not chainerx  # NOQA
 
     @name.setter
     def name(self, n):
+        # type: (str) -> None
         if self.xp is chainerx:
             self._chainerx_name = n
             return
-        self._node.name = n
+        self._node.name = n  # type: ignore # _node has value only when xp is not chainerx  # NOQA
 
     def summary(self):
+        # type: () -> str
         if self.name:
             return '<variable %s>' % self.name
         else:
             return '<variable at 0x%x>' % id(self)
 
     def debug_print(self):
+        # type: () -> str
         """Display a summary of the stored data and location of the Variable"""
 
         msg = """{summary}
@@ -747,7 +785,7 @@ class Variable(object):
             dtype = getattr(array, 'dtype', None)
 
             if self.grad is None:
-                grad = None
+                grad = None  # type: tp.Optional[tp.Union[int, str]]
             elif xp.all(self.grad == 0):
                 grad = 0
             else:
@@ -772,14 +810,16 @@ class Variable(object):
 
     @property
     def label(self):
+        # type: () -> str
         """Short text that represents the variable."""
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a node label.')
-        return self._node.label
+        return self._node.label  # type: ignore # _node has value only when xp is not chainerx  # NOQA
 
     @property
     def creator(self):
+        # type: () -> tp.Optional[tp.Union[function.Function, function_node.FunctionNode]] # NOQA
         """Function implementation that created this variable.
 
         When this variable has been created by an old-style function (i.e., it
@@ -794,17 +834,19 @@ class Variable(object):
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a creator.')
-        return self._node.creator
+        return self._node.creator  # type: ignore # _node has value only when xp is not chainerx  # NOQA
 
     @creator.setter
     def creator(self, func):
+        # type: (tp.Optional[tp.Union[function.Function, function_node.FunctionNode]]) -> None # NOQA
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a creator.')
-        self._node.creator = func
+        self._node.creator = func  # type: ignore # _node has value only when xp is not chainerx  # NOQA
 
     @property
     def creator_node(self):
+        # type: () -> tp.Optional[function_node.FunctionNode] # NOQA
         """:class:`FunctionNode` object that created this variable.
 
         This property has a setter to which ``None`` can be set. Setting
@@ -825,14 +867,15 @@ class Variable(object):
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a creator_node.')
-        return self._node._creator_node
+        return self._node._creator_node  # type: ignore # _node has value only when xp is not chainerx  # NOQA
 
     @creator_node.setter
     def creator_node(self, func):
+        # type: (tp.Optional[tp.Union[function.Function, function_node.FunctionNode]]) -> None # NOQA
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a creator_node.')
-        self._node.creator_node = func
+        self._node.creator_node = func  # type: ignore # _node has value only when xp is not chainerx  # NOQA
 
     @property
     def array(self):
@@ -858,7 +901,7 @@ class Variable(object):
     def array(self, d):
         # type: (tp.Optional[types.NdArray]) -> None
 
-        # Note: This line invokes get_device_from_array() twice which
+        # Note: These lines invoke get_device_from_array() twice which
         #       generates larger overhead.
         assert self.device == backend.get_device_from_array(d)
 
@@ -875,7 +918,7 @@ class Variable(object):
         else:
             self._data[0] = d
             self._has_chainerx_array = False
-            self._node._update_data_info(d)  # type: ignore # _node doesn't have value when xp is chainerx # NOQA
+            self._node._update_data_info(d)  # type: ignore # _node has value only when xp is not chainerx # NOQA
 
     @property
     def data(self):
@@ -996,29 +1039,35 @@ class Variable(object):
 
     @property
     def shape(self):
-        return self.array.shape
+        # type: () -> types.Shape
+        return self.array.shape  # type: ignore # assumes array has a value
 
     @property
     def ndim(self):
-        return self.array.ndim
+        # type: () -> int
+        return self.array.ndim  # type: ignore # assumes array has a value
 
     @property
     def size(self):
-        return self.array.size
+        # type: () -> int
+        return self.array.size  # type: ignore # assumes array has a value
 
     @property
     def dtype(self):
-        return self.array.dtype
+        # type: () -> numpy.dtype
+        return self.array.dtype  # type: ignore # assumes array has a value
 
     @property
     def rank(self):
+        # type: () -> int
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a node rank.')
-        return self._node.rank
+        return self._node.rank  # type: ignore # _node has value only when xp is not chainerx # NOQA
 
     @property
     def node(self):
+        # type: () -> tp.Optional[VariableNode]
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a node.')
@@ -1026,19 +1075,23 @@ class Variable(object):
 
     @property
     def requires_grad(self):
+        # type: () -> bool
         """It indicates that ``grad`` will be set in backward calculation."""
         return self._requires_grad
 
     @property
     def T(self):
+        # type: () -> "Variable"
         """Transposition of this variable."""
         return chainer.functions.transpose(self)
 
     def to_cpu(self):
+        # type: () -> None
         """Copies the data and gradient arrays to CPU."""
         self.to_device(backend.CpuDevice())
 
     def to_gpu(self, device=None):
+        # type: (types.DeviceSpec) -> None
         """Copies the data and gradient arrays to specified GPU.
 
         Args:
@@ -1050,6 +1103,7 @@ class Variable(object):
         self.to_device(cuda._get_device_or_current(device))
 
     def to_intel64(self):
+        # type: () -> None
         """Copies the data and gradient arrays to intel64 specific mdarray.
 
         If the array is not suited for intel64, it will be converted to
@@ -1059,6 +1113,7 @@ class Variable(object):
         self.to_device(intel64)
 
     def to_chainerx(self):
+        # type: () -> None
         """Converts the array and gradient to ChainerX arrays without copy.
 
         This method converts the underlying array and gradient to
@@ -1070,6 +1125,7 @@ class Variable(object):
         self._to_chainerx(allow_unchaining=False)
 
     def _to_chainerx(self, allow_unchaining):
+        # type: (bool) -> None
         if not chainerx.is_available():
             raise RuntimeError('ChainerX is not available.')
 
@@ -1094,6 +1150,7 @@ class Variable(object):
             allow_unchaining)
 
     def from_chainerx(self):
+        # type: () -> None
         """Converts the array and gradient to non-ChainerX arrays without copy.
 
         This method converts the underlying ChainerX array and gradient
@@ -1119,6 +1176,7 @@ class Variable(object):
         self.to_device(self.device.fallback_device)
 
     def to_device(self, device):
+        # type: (types.DeviceSpec) -> None
         """Copies the data and gradient arrays to specified device.
 
         Args:
@@ -1129,6 +1187,7 @@ class Variable(object):
         self._to_device(device, allow_unchaining=False)
 
     def _to_device(self, device, allow_unchaining):
+        # type: (types.DeviceSpec, bool) -> None
         device = chainer.get_device(device)
 
         old_device = self.device
@@ -1139,7 +1198,7 @@ class Variable(object):
 
         if not allow_unchaining:
             if was_chainerx and not is_chainerx:
-                if arr is not None and arr.is_backprop_required():
+                if arr is not None and arr.is_backprop_required():  # type: ignore # NOQA
                     raise RuntimeError(
                         'A variable of a ChainerX array which requires '
                         'gradients cannot be copied into non-chainerx device '
@@ -1158,7 +1217,7 @@ class Variable(object):
             self._clear_chainerx()
             self._node = VariableNode(self, self._chainerx_name)
         elif not was_chainerx and is_chainerx:
-            self._chainerx_name = self._node.name
+            self._chainerx_name = self._node.name  # type: ignore # _node has value only when xp is not chainerx # NOQA
 
         # Note: It affects the whole behavior of Variable's methods.
         #       We must place them in this place.
@@ -1191,16 +1250,18 @@ class Variable(object):
             # ensure that the node is disconnected with this variable.
             if node is not None:
                 # Disconnect by replacing with an alternative of dead weakref
-                node._variable = lambda: None
+                node._variable = lambda: None  # type: ignore
                 self._node = None
         else:
-            node._update_data_info(new_arr)
+            node._update_data_info(new_arr)  # type: ignore # _node has value only when xp is not chainerx # NOQA
 
     def cleargrad(self):
+        # type: () -> None
         """Clears the gradient array."""
         self.grad_var = None
 
     def zerograd(self):
+        # type: () -> None
         """Initializes the gradient array by zeros.
 
 
@@ -1223,10 +1284,10 @@ class Variable(object):
         if self.xp is chainerx:
             gv = self.grad_var
             if gv is None:
-                self.grad = chainerx.zeros_like(
-                    arr, device=self.device.device)
+                self.grad = chainerx.zeros_like(  # type: ignore
+                    arr, device=self.device.device)  # type: ignore
             else:
-                gv._data[0].fill(0)
+                gv._data[0].fill(0)  # type: ignore # gv._data[0] has a value # NOQA
         else:
             with cuda.get_device_from_array(arr) as dev:
                 if self._grad is None:
@@ -1240,6 +1301,7 @@ class Variable(object):
                     self._grad.fill(0)
 
     def copydata(self, var):
+        # type: ("Variable") -> None
         """Copies the data array from given source variable.
 
         This method copies the data array from given variable to this variable.
@@ -1260,14 +1322,15 @@ class Variable(object):
         if src is None:
             if dst is None:
                 return
-            var.initialize(self.shape)
+            var.initialize(self.shape)  # type:ignore # TODO(okapies): it should be Parameter # NOQA
             src = var.array
         elif dst is None:
-            self.initialize(src.shape)
+            self.initialize(src.shape)  # type:ignore # TODO(okapies): it should be Parameter # NOQA
             dst = self.array
         backend.copyto(dst, src)
 
     def addgrad(self, var):
+        # type: ("Variable") -> None
         """Accumulates the gradient array from given source variable.
 
         This method adds the gradient of a given variable to the gradient of
@@ -1289,9 +1352,10 @@ class Variable(object):
             return
 
         src = var.grad_var
+        assert src is not None
 
         if self.array is None:
-            self.initialize(var.shape)
+            self.initialize(var.shape)  # type:ignore # TODO(okapies): it should be Parameter # NOQA
 
         dst = self.grad_var
 
@@ -1300,10 +1364,11 @@ class Variable(object):
 
         if src_dev.id != dst_dev.id:
             src = chainer.functions.copy(src, dst_dev.id)
-        self._grad_var = src if dst is None else src + dst
+        self._grad_var = src if dst is None else src + dst  # type: ignore
         self._grad = None
 
     def set_creator(self, gen_func):
+        # type: (tp.Optional[function.Function]) -> None
         """Notifies the variable that the given function is its creator.
 
         Args:
@@ -1314,9 +1379,10 @@ class Variable(object):
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a creator.')
-        self._node.set_creator(gen_func)
+        self._node.set_creator(gen_func)  # type: ignore # _node has value only when xp is not chainerx # NOQA
 
     def set_creator_node(self, fnode):
+        # type: (tp.Optional[function_node.FunctionNode]) -> None
         """Notifies the variable that the given node is its creator.
 
         Args:
@@ -1327,10 +1393,11 @@ class Variable(object):
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a creator node.')
-        self._node.set_creator_node(fnode)
+        self._node.set_creator_node(fnode)  # type: ignore # _node has value only when xp is not chainerx # NOQA
 
     def backward(self, retain_grad=False, enable_double_backprop=False,
                  loss_scale=None):
+        # type: (bool, bool, float) -> None # NOQA
         """Runs error backpropagation (a.k.a.\\  backprop) from this variable.
 
         On backprop,
@@ -1394,9 +1461,13 @@ class Variable(object):
                 arr, enable_double_backprop=enable_double_backprop)
             return
 
+        array = self.array
+        assert array is not None
+        grad_var = self.grad_var
+
         # Initialize error by 1, if this is a loss variable
-        if self.array.size == 1 and self.grad_var is None:
-            if self.array.ndim != 0:
+        if array.size == 1 and grad_var is None:
+            if array.ndim != 0:
                 warnings.warn(
                     'Treating a scalar as a variable with only one element'
                     ' in Variable.backward is deprecated. A scalar variable'
@@ -1405,11 +1476,11 @@ class Variable(object):
                     ' If the size of this variable accidentally becomes one,'
                     ' set zero to grad.',
                     DeprecationWarning)
-            with cuda.get_device_from_array(self.array) as device:
+            with cuda.get_device_from_array(array) as device:
                 if device is cuda.DummyDevice:
-                    self.grad = numpy.ones_like(self.array)
+                    self.grad = numpy.ones_like(array)
                 else:
-                    self.grad = cuda.cupy.ones_like(self.array)
+                    self.grad = cuda.cupy.ones_like(array)
             if loss_scale is not None:
                 self.grad *= loss_scale
 
@@ -1417,6 +1488,7 @@ class Variable(object):
             _backprop_to_all([self], retain_grad, loss_scale)
 
     def reshape(self, *shape):
+        # type: (*types.ShapeSpec) -> "Variable"
         """Returns a variable of a different shape and the same content.
 
         .. seealso::
@@ -1424,10 +1496,11 @@ class Variable(object):
 
         """
         if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
-            shape = shape[0]
-        return chainer.functions.reshape(self, shape)
+            shape = shape[0]  # type: ignore # convert to Sequence[int]
+        return chainer.functions.reshape(self, shape)  # type: ignore
 
     def transpose(self, *axes):
+        # type: (*types.AxesSpec) -> "Variable"
         """Permute the dimensions of an input variable without copy.
 
         .. seealso::
@@ -1435,13 +1508,14 @@ class Variable(object):
 
         """
         if len(axes) == 0:
-            axes = None
+            axes = None  # type: ignore # convert to Optional[Sequence[int]]
         elif len(axes) == 1 and (isinstance(axes[0], (tuple, list)) or
                                  axes[0] is None):
-            axes = axes[0]
-        return chainer.functions.transpose(self, axes)
+            axes = axes[0]  # type: ignore # convert to Optional[Sequence[int]]
+        return chainer.functions.transpose(self, axes)  # type: ignore
 
     def unchain(self):
+        # type: () -> None
         """Deletes the reference to the creator of this variable.
 
         This method deletes the reference to the creator from the corresponding
@@ -1457,6 +1531,7 @@ class Variable(object):
         self.creator_node = None
 
     def unchain_backward(self):
+        # type: () -> None
         """Deletes references between variable nodes and functions backward.
 
         After this method completes, intermediate variable nodes and functions
@@ -1472,7 +1547,7 @@ class Variable(object):
                 'A variable of ChainerX does not provide an unchain_backward '
                 'method.')
         cand_funcs = []
-        seen_set = set()
+        seen_set = set()  # type: tp.Set[function_node.FunctionNode]
 
         def add_cand(cand):
             if cand is not None and cand not in seen_set:
@@ -1488,12 +1563,13 @@ class Variable(object):
             func.unchain()
 
     def retain_data(self):
+        # type: () -> None
         """Lets the corresponding variable node keep the underlying array."""
         if self.xp is chainerx:
             raise RuntimeError(
                 'A variable of ChainerX does not provide a retain_data '
                 'method.')
-        self._node.data = self._data[0]
+        self._node.data = self._data[0]  # type: ignore # _node has value only when xp is not chainerx # NOQA
 
     def __lt__(self, other):
         """This operator is not defined for Variable."""
@@ -1682,7 +1758,7 @@ class Parameter(Variable):
 
     """
 
-    initializer = None  # type: tp.Optional[tp.Union[tp.Optional[types.AbstractInitializer], types.NdArray]] # NOQA
+    initializer = None  # type: types.AbstractInitializer # NOQA
     # TODO(okapies): fix the behavior when shape is None and remove NdArray
     _grad_initializer = None  # type: tp.Optional[types.AbstractInitializer]
 
@@ -1690,32 +1766,34 @@ class Parameter(Variable):
         # type: (tp.Optional[types.InitializerSpec], tp.Optional[types.ShapeSpec], tp.Optional[str]) -> None # NOQA
 
         if initializer is None:
-            initializer = constant.NaN()
+            init_func = constant.NaN()  # type: types.AbstractInitializer
         elif numpy.isscalar(initializer):
-            initializer = constant.Constant(initializer)
+            init_func = constant.Constant(initializer)
+        else:
+            init_func = initializer  # type: ignore # initializer is callable
         if shape is None:
-            if chainer.is_arrays_compatible([initializer]):
+            if chainer.is_arrays_compatible([init_func]):
                 # parameter initialized by the initial array
-                super(Parameter, self).__init__(initializer, name=name)
+                super(Parameter, self).__init__(init_func, name=name)
             else:
                 # uninitialized parameter
                 super(Parameter, self).__init__(name=name)
-                dtype = getattr(initializer, 'dtype', None)
+                dtype = getattr(init_func, 'dtype', None)
                 self._grad_initializer = constant.NaN(dtype)
         else:
             # parameter initialized with a given shape
-            if chainer.is_arrays_compatible([initializer]):
-                xp = backend.get_array_module(initializer)
-                initializer = constant.Constant(initializer)
+            if chainer.is_arrays_compatible([init_func]):
+                xp = backend.get_array_module(init_func)
+                init_func = constant.Constant(init_func)
             else:
                 xp = numpy
-            data = initializers.generate_array(initializer, shape, xp)  # type: ignore # NOQA
+            data = initializers.generate_array(init_func, shape, xp)  # type: ignore # NOQA
             grad = xp.full_like(data, numpy.nan)
             super(Parameter, self).__init__(data, name=name, grad=grad)
 
         self._initial_device = backend.CpuDevice()
         self.update_rule = None
-        self.initializer = initializer
+        self.initializer = init_func
 
     def __copy__(self):
         return self._copy_to(Parameter())
@@ -1792,6 +1870,7 @@ class Parameter(Variable):
             self._grad_initializer = initializers.Zero(dtype)
 
     def initialize(self, shape):
+        # type: (types.ShapeSpec) -> None
         """Initializes the uninitialized variable.
 
         Uninitialized variable is a variable created with the data array set to
@@ -1832,6 +1911,7 @@ class Parameter(Variable):
 
 
 def as_variable(obj):
+    # type: (tp.Union[Variable, types.NdArray]) -> Variable
     """Converts an array or a variable into :class:`~chainer.Variable`.
 
     This is a convenient function to get a :class:`~chainer.Variable` object

@@ -1,7 +1,10 @@
 import numpy
+import typing as tp  # NOQA
 
 from chainer import function_node
+from chainer import types  # NOQA
 from chainer.utils import type_check
+from chainer import variable  # NOQA
 
 
 class Transpose(function_node.FunctionNode):
@@ -34,6 +37,7 @@ class Transpose(function_node.FunctionNode):
 
 
 def transpose(x, axes=None):
+    # type: (tp.Union[variable.Variable, types.NdArray], tp.Optional[tp.Sequence[int]]) -> variable.Variable # NOQA
     """Permute the dimensions of an input variable without copy.
 
     Args:

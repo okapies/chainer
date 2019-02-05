@@ -7,6 +7,7 @@ import weakref
 
 import numpy
 import six
+import typing as tp  # NOQA
 
 import chainer
 from chainer import _backprop_utils
@@ -16,6 +17,7 @@ from chainer import configuration
 from chainer import function_hook
 from chainer.graph_optimizations.static_graph_utilities \
     import static_forward_optimizations
+from chainer import types  # NOQA
 from chainer import utils
 from chainer.utils import type_check
 from chainer import variable
@@ -598,6 +600,7 @@ Use apply() method instead.\
         self._output_indexes_to_retain = indexes
 
     def backward(self, target_input_indexes, grad_outputs):
+        # type: (tp.Tuple[int], tp.Tuple[variable.Variable, ...]) -> tp.Sequence[tp.Optional[variable.Variable]] # NOQA
         """Computes gradients w.r.t.\\  specified inputs given output gradients.
 
         This method is used to compute one step of the backpropagation

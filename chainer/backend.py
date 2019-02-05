@@ -1,4 +1,5 @@
 import numpy
+import typing as tp  # NOQA
 
 import chainer
 from chainer.backends import _chainerx
@@ -183,6 +184,7 @@ def get_array_module(*args):
 
 
 def get_device_from_array(*arrays):
+    # type: (*types.NdArray) -> Device
     """Gets the device from arrays.
 
     The device on which the given array reside is returned.
